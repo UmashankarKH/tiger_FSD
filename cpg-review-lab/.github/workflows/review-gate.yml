@@ -1,0 +1,54 @@
+name: review-gate
+
+# Every pull request must clear four gates, cheapest first:
+#   1. tests and a coverage floor   2. Bandit (security linter)
+#   3. bloat check (no LLM)         4. LLM judge on changed source files (needs an API key)
+
+on:
+  pull_request:
+    paths: ["src/**", "tests/**", "tools/**", "prompts/**"]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the judge step diffs against the base branch
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Tests with coverage floor
+        run: python -m pytest --cov=procurement_fixed --cov-fail-under=95
+
+      - name: Security lint (Bandit, medium severity and above)
+        run: bandit -q -r src/procurement_fixed.py -ll
+
+      - name: Bloat check
+        run: python tools/bloat_check.py src/procurement_fixed.py --also-scan tests
+
+      - name: LLM judge on changed source files
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "No ANTHROPIC_API_KEY available (fork PR or secret not set): skipping the LLM judge."
+            exit 0
+          fi
+          mkdir -p judge-reports
+          files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- 'src/*.py' | grep -v procurement_legacy || true)
+          for f in $files; do
+            python tools/judge_pipeline.py review "$f" --json "judge-reports/$(basename "$f").json"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: judge-reports
+          path: judge-reports/
+          if-no-files-found: ignore

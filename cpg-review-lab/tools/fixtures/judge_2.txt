@@ -1,0 +1,15 @@
+{
+  "verdict": "approve",
+  "summary": "Proportionate to the task: one function, invalid dates raise ValueError via fromisoformat, no dead code or unreachable checks.",
+  "bloat_score": 1,
+  "findings": [
+    {
+      "category": "readability",
+      "severity": "low",
+      "owasp": null,
+      "evidence": "d[\"delivered\"] is None: continue",
+      "issue": "An invalid promised date on a row outside the 90-day window is never parsed, so it is not reported. Acceptable for this task, which only needs the dates it uses.",
+      "fix": "Optional. Parse promised for every delivered row if strict validation of all input is wanted."
+    }
+  ]
+}

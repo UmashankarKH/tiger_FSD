@@ -1,0 +1,26 @@
+```python
+from datetime import date, timedelta
+
+WINDOW_DAYS = 90
+
+
+def supplier_risk(deliveries, today):
+    """Late-delivery percentage and risk bucket for deliveries in the last 90 days."""
+    end = date.fromisoformat(today)
+    start = end - timedelta(days=WINDOW_DAYS)
+    in_window = []
+    for d in deliveries:
+        if d["delivered"] is None:
+            continue
+        delivered = date.fromisoformat(d["delivered"])
+        if start <= delivered <= end:
+            in_window.append((date.fromisoformat(d["promised"]), delivered))
+
+    if not in_window:
+        return {"late_pct": None, "bucket": "Unknown", "sample_size": 0}
+
+    late = sum(1 for promised, delivered in in_window if delivered > promised)
+    pct = round(late / len(in_window) * 100, 1)
+    bucket = "Low" if pct < 10 else "Medium" if pct < 25 else "High"
+    return {"late_pct": pct, "bucket": bucket, "sample_size": len(in_window)}
+```

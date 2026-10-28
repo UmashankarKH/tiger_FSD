@@ -1,0 +1,135 @@
+{
+  "verdict": "revise",
+  "summary": "Multiple exploitable flaws (SQL and shell injection, forgeable tokens, a hardcoded admin backdoor, unsafe pickle loading) plus roughly a third of the file that can be deleted.",
+  "bloat_score": 6,
+  "findings": [
+    {
+      "category": "security",
+      "severity": "high",
+      "owasp": "A05:2025 Injection",
+      "evidence": "\"WHERE s.name = '\" + supplier_name + \"' ORDER BY ...\" in get_supplier_orders",
+      "issue": "The supplier name is concatenated into the SQL string. Input such as x' OR '1'='1 returns every purchase order in the system, and UNION payloads can read other tables including users.",
+      "fix": "Use a bound parameter: WHERE s.name = ? with (supplier_name,)."
+    },
+    {
+      "category": "security",
+      "severity": "high",
+      "owasp": "A05:2025 Injection",
+      "evidence": "subprocess.call(\"gzip -f \" + path, shell=True) in export_report",
+      "issue": "The caller-supplied filename reaches a shell. A name like 'r; touch pwned' runs arbitrary commands as the service user.",
+      "fix": "Validate the name, then compress in-process with the gzip module. No shell."
+    },
+    {
+      "category": "security",
+      "severity": "high",
+      "owasp": "A01:2025 Broken Access Control",
+      "evidence": "path = os.path.join(EXPORT_DIR, filename) in export_report",
+      "issue": "No validation of filename. '../x' and absolute paths escape EXPORT_DIR (os.path.join discards the directory when given an absolute path), allowing arbitrary file overwrite.",
+      "fix": "Accept only names matching ^[A-Za-z0-9_-]{1,64}$ and build the path from a fixed suffix inside EXPORT_DIR."
+    },
+    {
+      "category": "security",
+      "severity": "high",
+      "owasp": "A08:2025 Software or Data Integrity Failures",
+      "evidence": "pickle.loads(base64.b64decode(blob)) in load_cached_report",
+      "issue": "Unpickling untrusted data executes arbitrary code. Anyone who can write to the cache can run code in the service.",
+      "fix": "Serialize cached reports as JSON."
+    },
+    {
+      "category": "security",
+      "severity": "high",
+      "owasp": "A07:2025 Authentication Failures",
+      "evidence": "if username == \"admin\" and password == ADMIN_PASSWORD: in login; ADMIN_PASSWORD = \"admin123\"",
+      "issue": "A hardcoded admin credential in source control is a permanent backdoor that works on every deployment.",
+      "fix": "Remove it. Create admin users through the normal registration path with a secret supplied at deploy time."
+    },
+    {
+      "category": "security",
+      "severity": "high",
+      "owasp": "A07:2025 Authentication Failures",
+      "evidence": "_make_token returns base64(\"username:role\"); verify_token just decodes it",
+      "issue": "Tokens are unsigned and never expire. Anyone can mint a valid admin token with base64('admin:admin'). SECRET_KEY is defined but never used.",
+      "fix": "Sign tokens with HMAC-SHA256 using a key from the environment, include an expiry, and compare signatures in constant time."
+    },
+    {
+      "category": "security",
+      "severity": "high",
+      "owasp": "A01:2025 Broken Access Control",
+      "evidence": "approve_order only checks that verify_token returned a user",
+      "issue": "Any authenticated user, including a read-only viewer, can approve purchase orders. No role check.",
+      "fix": "Require role in {approver, admin} and raise PermissionError otherwise."
+    },
+    {
+      "category": "security",
+      "severity": "medium",
+      "owasp": "A04:2025 Cryptographic Failures",
+      "evidence": "hashlib.md5(password.encode()).hexdigest() in _hash_password",
+      "issue": "Unsalted MD5 password hashes are cracked in seconds from a database leak, and identical passwords share identical hashes.",
+      "fix": "Use a salted, deliberately slow hash such as scrypt (hashlib.scrypt) or bcrypt/argon2."
+    },
+    {
+      "category": "security",
+      "severity": "medium",
+      "owasp": "A10:2025 Mishandling of Exceptional Conditions",
+      "evidence": "return {\"error\": str(e), \"trace\": traceback.format_exc()} when DEBUG is True",
+      "issue": "Leaks SQL text, file paths and stack traces to the caller, and DEBUG is hardcoded True. It also changes the return type from list to dict, so callers that iterate the result get garbage.",
+      "fix": "Do not catch broadly here. Log server-side and let the caller receive a generic error; always return a list."
+    },
+    {
+      "category": "correctness",
+      "severity": "high",
+      "owasp": "A10:2025 Mishandling of Exceptional Conditions",
+      "evidence": "except (KeyError, ValueError, TypeError): qty = 0; price = 0.0 in calculate_po_total",
+      "issue": "Malformed lines are silently priced at zero, and negative quantities reduce the total. A bad upload produces a wrong PO total with no error. Floats are also used for money.",
+      "fix": "Raise ValueError for malformed lines and for qty <= 0 or price < 0. Use Decimal for the arithmetic."
+    },
+    {
+      "category": "correctness",
+      "severity": "medium",
+      "owasp": null,
+      "evidence": "conn = _get_conn() ... conn.close() with no try/finally in create_order, mark_delivered, approve_order and others",
+      "issue": "Any exception between opening and closing the connection leaks it. approve_order also returns True for a purchase order id that does not exist.",
+      "fix": "Use contextlib.closing plus `with conn:` so the transaction commits or rolls back as a unit and the connection always closes, and raise LookupError when no row is updated."
+    },
+    {
+      "category": "bloat",
+      "severity": "high",
+      "owasp": null,
+      "evidence": "AbstractSupplierRepository, SqliteSupplierRepository, SupplierRepositoryFactory",
+      "issue": "Three classes to run two queries, with one implementation and a factory that only accepts 'sqlite'. find_by_name is never called.",
+      "fix": "Replace with two plain functions, add_supplier and get_supplier."
+    },
+    {
+      "category": "bloat",
+      "severity": "medium",
+      "owasp": null,
+      "evidence": "class ConfigManager (singleton) used only in _get_conn",
+      "issue": "A singleton config store that nothing ever writes to. set and reset are never called.",
+      "fix": "Delete it and read DB_PATH directly."
+    },
+    {
+      "category": "bloat",
+      "severity": "medium",
+      "owasp": null,
+      "evidence": "format_currency_legacy, _calc_moving_average, _normalize_supplier_name_v2, legacy_csv_export; unused import json",
+      "issue": "Four functions and one import that nothing references.",
+      "fix": "Delete them."
+    },
+    {
+      "category": "bloat",
+      "severity": "medium",
+      "owasp": null,
+      "evidence": "if len(lines) < 0; if total is None; if not isinstance(total, float); if late > total; if pct < 0; if pct > 100; if bucket is None",
+      "issue": "Checks for values that cannot occur: lengths are never negative, a float sum is never None, late can never exceed total, a ratio of two counts cannot leave 0..100. They add branches that can never be tested and imply risks that do not exist.",
+      "fix": "Delete every one of them."
+    },
+    {
+      "category": "bloat",
+      "severity": "low",
+      "owasp": null,
+      "evidence": "try/except Exception: return default in ConfigManager.get; except Exception: return 0.0 in calculate_po_total",
+      "issue": "Broad handlers that hide real failures behind a default value.",
+      "fix": "Catch only the specific exception you can handle, or none."
+    }
+  ]
+}

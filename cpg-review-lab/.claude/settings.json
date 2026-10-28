@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m pytest *)",
+      "Bash(python3 tools/bloat_check.py *)",
+      "Bash(bandit *)",
+      "Bash(CPG_DRY_RUN=1 python3 tools/*)"
+    ]
+  }
+}

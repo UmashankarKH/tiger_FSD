@@ -1,0 +1,82 @@
+```python
+import logging
+from abc import ABC, abstractmethod
+from datetime import date, datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+
+class RiskConfig:
+    """Configuration for risk calculation."""
+
+    LOW_THRESHOLD = 10.0
+    MEDIUM_THRESHOLD = 25.0
+    WINDOW_DAYS = 90
+
+
+class BaseRiskCalculator(ABC):
+    @abstractmethod
+    def calculate(self, deliveries, today):
+        pass
+
+
+class DateParser:
+    @staticmethod
+    def parse(value):
+        try:
+            if value is None:
+                return None
+            if isinstance(value, date):
+                return value
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except Exception as e:
+            logger.error("Failed to parse date %s: %s", value, e)
+            return None
+
+
+class SupplierRiskCalculator(BaseRiskCalculator):
+    def __init__(self, config=None):
+        self.config = config if config is not None else RiskConfig()
+
+    def _bucket(self, pct):
+        if pct is None:
+            return "Unknown"
+        if pct < self.config.LOW_THRESHOLD:
+            return "Low"
+        elif pct < self.config.MEDIUM_THRESHOLD:
+            return "Medium"
+        else:
+            return "High"
+
+    def calculate(self, deliveries, today):
+        try:
+            today_date = DateParser.parse(today)
+            if today_date is None:
+                return {"late_pct": None, "bucket": "Unknown", "sample_size": 0}
+            start = today_date - timedelta(days=self.config.WINDOW_DAYS)
+            in_window = []
+            for d in deliveries:
+                delivered = DateParser.parse(d.get("delivered"))
+                promised = DateParser.parse(d.get("promised"))
+                if delivered is None or promised is None:
+                    continue
+                if start <= delivered <= today_date:
+                    in_window.append((promised, delivered))
+            if not in_window:
+                return {"late_pct": None, "bucket": "Unknown", "sample_size": 0}
+            late = sum(1 for p, d in in_window if d > p)
+            pct = round((late / len(in_window)) * 100, 1)
+            if pct is None:
+                pct = 0.0
+            return {"late_pct": pct, "bucket": self._bucket(pct), "sample_size": len(in_window)}
+        except Exception as e:
+            logger.exception("Unexpected error: %s", e)
+            return {"late_pct": None, "bucket": "Unknown", "sample_size": 0}
+
+
+def supplier_risk(deliveries, today):
+    """Calculate supplier risk."""
+    calculator = SupplierRiskCalculator()
+    return calculator.calculate(deliveries, today)
+```

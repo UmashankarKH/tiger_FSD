@@ -1,0 +1,63 @@
+{
+  "verdict": "revise",
+  "summary": "A 20-line function was delivered as four classes and 90 lines, and it silently ignores invalid dates even though the task says to raise ValueError.",
+  "bloat_score": 8,
+  "findings": [
+    {
+      "category": "correctness",
+      "severity": "high",
+      "owasp": "A10:2025 Mishandling of Exceptional Conditions",
+      "evidence": "DateParser.parse ... except Exception: return None",
+      "issue": "Invalid date strings are logged and turned into None, so a bad row is skipped (or the whole result becomes 'Unknown') instead of raising ValueError as the task requires. Bad data now produces plausible but wrong risk scores.",
+      "fix": "Parse with date.fromisoformat and let its ValueError propagate."
+    },
+    {
+      "category": "bloat",
+      "severity": "high",
+      "owasp": null,
+      "evidence": "class BaseRiskCalculator(ABC) with one subclass SupplierRiskCalculator",
+      "issue": "An abstract base class with a single implementation, wrapped by a module-level function that just instantiates it. The task asked for one function.",
+      "fix": "Delete BaseRiskCalculator, SupplierRiskCalculator and DateParser. Implement supplier_risk directly as a plain function."
+    },
+    {
+      "category": "bloat",
+      "severity": "medium",
+      "owasp": null,
+      "evidence": "class RiskConfig with LOW_THRESHOLD, MEDIUM_THRESHOLD, WINDOW_DAYS",
+      "issue": "A config class with injectable instances that nothing configures. Speculative generality.",
+      "fix": "Use three module-level constants, or inline the numbers given in the task."
+    },
+    {
+      "category": "bloat",
+      "severity": "medium",
+      "owasp": null,
+      "evidence": "if pct is None: pct = 0.0   (directly after pct = round(...))",
+      "issue": "round() of a number never returns None, so this branch can never run. The _bucket check for pct is None is also unreachable because the empty case returns earlier.",
+      "fix": "Remove both checks."
+    },
+    {
+      "category": "bloat",
+      "severity": "medium",
+      "owasp": null,
+      "evidence": "except Exception as e: logger.exception(...); return {... 'Unknown' ...}",
+      "issue": "A catch-all that converts every bug into an 'Unknown' risk bucket. A supplier could be reported as unknown because of a typo in the code, and nobody would notice.",
+      "fix": "Remove the outer try/except. Let unexpected errors surface."
+    },
+    {
+      "category": "bloat",
+      "severity": "low",
+      "owasp": null,
+      "evidence": "from typing import Any, Dict, List, Optional",
+      "issue": "Four imported names, none used.",
+      "fix": "Delete the import line."
+    },
+    {
+      "category": "readability",
+      "severity": "low",
+      "owasp": null,
+      "evidence": "isinstance(value, date) branch in DateParser.parse",
+      "issue": "The task says dates arrive as ISO strings, so accepting date objects is unrequested flexibility.",
+      "fix": "Drop it along with DateParser."
+    }
+  ]
+}
