@@ -1,0 +1,16 @@
+section,category,metric_or_feature,value,shap_mean_abs,direction,notes
+metrics,ALL,holdout_auc,0.81,,,Gradient-boosted classifier; 12-month holdout; target = supplier cost overrun above 5% of contract value
+metrics,ALL,holdout_precision_at_10pct,0.64,,,Top 10% of predicted-risk lines
+metrics,ALL,holdout_recall_at_10pct,0.38,,,Share of actual overruns captured in top 10%
+metrics,ALL,training_rows,48210,,,Purchase order lines FY23-FY25
+feature,ALL,supplier_on_time_rate_90d,0.42,0.118,lower rate raises risk,Share of deliveries on time in the prior 90 days
+feature,ALL,price_index_vs_benchmark,1.07,0.094,higher index raises risk,Unit price relative to category benchmark
+feature,ALL,single_source_flag,1,0.071,raises risk,Only one qualified supplier for the item
+feature,ALL,contract_age_months,14,0.035,longer contract lowers risk,Months since contract signature
+feature,ALL,order_value_log,11.2,0.029,higher value raises risk,Log of line value in local currency
+feature,ALL,fx_volatility_30d,0.018,0.022,higher volatility raises risk,30-day FX volatility for the supplier currency
+category,Packaging,predicted_overrun_rate,0.19,,,Share of lines above 5% overrun; spend 4.2M USD
+category,Logistics,predicted_overrun_rate,0.27,,,Share of lines above 5% overrun; spend 9.8M USD
+category,Raw Materials,predicted_overrun_rate,0.33,,,Share of lines above 5% overrun; spend 21.5M USD
+category,Indirect IT,predicted_overrun_rate,0.12,,,Share of lines above 5% overrun; spend 3.1M USD
+category,MRO,predicted_overrun_rate,0.22,,,Share of lines above 5% overrun; spend 1.7M USD
